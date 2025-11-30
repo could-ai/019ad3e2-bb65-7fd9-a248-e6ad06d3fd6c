@@ -1,123 +1,237 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:math';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const OlafVikingGame());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class OlafVikingGame extends StatelessWidget {
+  const OlafVikingGame({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'أولاف الفايكنج - لعبة الجري',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.blue,
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const MyHomePage(title: 'Flutter Demo Home Page'),
+        '/': (context) => const GameScreen(),
       },
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class GameScreen extends StatefulWidget {
+  const GameScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<GameScreen> createState() => _GameScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
+  late Timer _timer;
+  double olafY = 400; // موقع أولاف العمودي
+  double olafX = 100; // موقع أولاف الأفقي
+  List<Obstacle> obstacles = [];
+  List<Coin> coins = [];
+  int score = 0;
+  bool isGameOver = false;
+  double scrollX = 0; // للتمرير الخلفية
+  int backgroundType = 0; // 0: جليدي، 1: جبال، 2: بركان
+  Random random = Random();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    startGame();
+  }
+
+  void startGame() {
+    isGameOver = false;
+    score = 0;
+    olafY = 400;
+    obstacles.clear();
+    coins.clear();
+    scrollX = 0;
+    backgroundType = 0;
+    _timer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
+      updateGame();
     });
+  }
+
+  void updateGame() {
+    if (isGameOver) return;
+
+    setState(() {
+      // تحديث التمرير
+      scrollX += 2;
+      if (scrollX > 1360) {
+        scrollX = 0;
+        backgroundType = (backgroundType + 1) % 3;
+      }
+
+      // تحديث العوائق
+      for (var obstacle in obstacles) {
+        obstacle.x -= 5;
+      }
+      obstacles.removeWhere((obstacle) => obstacle.x < -50);
+
+      // تحديث العملات
+      for (var coin in coins) {
+        coin.x -= 5;
+      }
+      coins.removeWhere((coin) => coin.x < -50);
+
+      // إضافة عوائق وعملات عشوائياً
+      if (random.nextDouble() < 0.02) {
+        obstacles.add(Obstacle(1360, random.nextDouble() * 800 + 100));
+      }
+      if (random.nextDouble() < 0.03) {
+        coins.add(Coin(1360, random.nextDouble() * 800 + 100));
+      }
+
+      // التحقق من التصادم مع العوائق
+      for (var obstacle in obstacles) {
+        if (olafX + 50 > obstacle.x && olafX < obstacle.x + 50 &&
+            olafY + 50 > obstacle.y && olafY < obstacle.y + 50) {
+          gameOver();
+        }
+      }
+
+      // التحقق من جمع العملات
+      for (var coin in coins) {
+        if (olafX + 50 > coin.x && olafX < coin.x + 50 &&
+            olafY + 50 > coin.y && olafY < coin.y + 50) {
+          score += 10;
+          coins.remove(coin);
+          break;
+        }
+      }
+    });
+  }
+
+  void gameOver() {
+    isGameOver = true;
+    _timer.cancel();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('انتهت اللعبة'),
+        content: Text('نقاطك: $score'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              startGame();
+            },
+            child: const Text('إعادة اللعب'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void jump() {
+    if (!isGameOver) {
+      setState(() {
+        olafY -= 100;
+        if (olafY < 0) olafY = 0;
+      });
+      Future.delayed(const Duration(milliseconds: 300), () {
+        setState(() {
+          olafY += 100;
+          if (olafY > 800) olafY = 800;
+        });
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text('$_counter', style: Theme.of(context).textTheme.headlineMedium),
-          ],
+      body: GestureDetector(
+        onTap: jump,
+        child: Container(
+          width: 1360,
+          height: 960,
+          decoration: BoxDecoration(
+            color: backgroundType == 0
+                ? Colors.lightBlueAccent
+                : backgroundType == 1
+                    ? Colors.green[200]
+                    : Colors.redAccent,
+          ),
+          child: Stack(
+            children: [
+              // رسم أولاف
+              Positioned(
+                left: olafX,
+                top: olafY,
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  color: Colors.orange,
+                  child: const Center(child: Text('O', style: TextStyle(fontSize: 30, color: Colors.white))),
+                ),
+              ),
+              // رسم العوائق
+              ...obstacles.map((obstacle) => Positioned(
+                left: obstacle.x,
+                top: obstacle.y,
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  color: Colors.grey,
+                  child: const Center(child: Text('⚠', style: TextStyle(fontSize: 30))),
+                ),
+              )),
+              // رسم العملات
+              ...coins.map((coin) => Positioned(
+                left: coin.x,
+                top: coin.y,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: const BoxDecoration(
+                    color: Colors.yellow,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(child: Text('¢', style: TextStyle(fontSize: 20, color: Colors.white))),
+                ),
+              )),
+              // عرض النقاط
+              Positioned(
+                top: 20,
+                left: 20,
+                child: Text(
+                  'النقاط: $score',
+                  style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
+}
+
+class Obstacle {
+  double x, y;
+  Obstacle(this.x, this.y);
+}
+
+class Coin {
+  double x, y;
+  Coin(this.x, this.y);
 }
